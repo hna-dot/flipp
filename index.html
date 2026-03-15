@@ -45,8 +45,12 @@ html, body { height: 100%; background: #f5f5f3; font-family: -apple-system, Blin
 .progress-bar-fill { height: 100%; background: #111; border-radius: 99px; transition: width 0.3s; }
 .progress-count { font-size: 12px; color: #999; white-space: nowrap; }
 
-.card-area { position: relative; height: 340px; flex-shrink: 0; margin-bottom: 1rem; touch-action: pan-y; cursor: pointer; user-select: none; }
+.card-area { position: relative; height: 340px; flex-shrink: 0; margin-bottom: 1rem; touch-action: pan-y; cursor: pointer; user-select: none; overflow: hidden; }
 .flashcard { position: absolute; inset: 0; background: #fff; border: 0.5px solid #e0e0e0; border-radius: 20px; padding: 2rem 1.75rem; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; }
+.flashcard.slide-in-left { animation: slideInLeft 0.22s cubic-bezier(.4,0,.2,1) both; }
+.flashcard.slide-in-right { animation: slideInRight 0.22s cubic-bezier(.4,0,.2,1) both; }
+@keyframes slideInLeft { from { transform: translateX(110%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+@keyframes slideInRight { from { transform: translateX(-110%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 .flashcard.back { background: #111; border-color: #111; }
 .flashcard.back .card-content { color: #fff; }
 .flashcard.back .card-side-label { color: rgba(255,255,255,0.35); }
@@ -276,7 +280,7 @@ function launchConfetti() {
   draw();
 }
 
-// ── DECK ───────────────────────────────────────────────────────────────────
+let slideDir = ''; // 'left' | 'right' | ''
 function initDeck() {
   const active = getActive(studyFilter);
   studyDeck = [...active].sort(() => Math.random() - 0.5).map(c => c.id);
@@ -319,7 +323,7 @@ function renderStudy() {
       <span class="progress-count">${deckCardIdx + 1} / ${studyDeck.length}</span>
     </div>
     <div class="card-area" id="card-area">
-      <div class="flashcard ${isBack?'back':''}">
+      <div class="flashcard ${isBack?'back':''} ${slideDir==='left'?'slide-in-left':slideDir==='right'?'slide-in-right':''}">
         <span class="card-side-label">${isBack ? '뒷면' : '앞면'}</span>
         <div class="card-content">${escHtml(isBack ? card.b : card.a)}</div>
       </div>
@@ -379,21 +383,53 @@ function setupCardInteraction() {
 }
 
 function goNext() {
-  if (!isBack) { isBack = true; renderStudy(); }
-  else {
+  if (!isBack) {
+    slideDir = '';
+    isBack = true;
+    renderStudy();
+  } else {
     if (deckCardIdx === studyDeck.length - 1) {
+      slideDir = '';
       isBack = false; deckCardIdx = 0;
       const el = document.getElementById('study-tab');
       const tags = allTags();
       const tagBar = `<div class="tag-scroll">${['전체',...tags].map(t=>`<div class="tag-pill ${studyFilter===t?'active':''}" onclick="setStudyFilter('${esc(t)}')">${esc(t)}</div>`).join('')}</div>`;
       showCelebration(el, tagBar, studyDeck.length);
-    } else { isBack = false; deckCardIdx++; renderStudy(); }
+    } else {
+      slideCard('left', () => {
+        slideDir = 'left';
+        isBack = false; deckCardIdx++;
+        renderStudy();
+        slideDir = '';
+      });
+    }
   }
 }
 function goPrev() {
-  if (isBack) { isBack = false; }
-  else { deckCardIdx = (deckCardIdx - 1 + studyDeck.length) % studyDeck.length; isBack = true; }
-  renderStudy();
+  if (isBack) {
+    slideDir = '';
+    isBack = false;
+    renderStudy();
+  } else if (deckCardIdx > 0) {
+    slideCard('right', () => {
+      slideDir = 'right';
+      deckCardIdx--; isBack = false;
+      renderStudy();
+      slideDir = '';
+    });
+  }
+}
+
+function slideCard(dir, callback) {
+  const area = document.getElementById('card-area');
+  if (!area) { callback(); return; }
+  const card = area.querySelector('.flashcard');
+  if (!card) { callback(); return; }
+  const out = dir === 'left' ? '-110%' : '110%';
+  card.style.transition = 'transform 0.2s cubic-bezier(.4,0,.2,1), opacity 0.2s';
+  card.style.transform = `translateX(${out})`;
+  card.style.opacity = '0';
+  setTimeout(callback, 200);
 }
 function reshuffleDeck() {
   const active = getActive(studyFilter);
@@ -747,7 +783,6 @@ function handleImportFile(e) {
 }
 
 function downloadTemplate() {
-  // 헤더: 필수(*) / 선택 구분
   const header = [
     '앞면_A_필수', '뒷면_B_필수', '태그_선택(여러개는|로구분)', '외웠음_선택(0또는1)'
   ].map(h => '"' + h + '"').join(',');
@@ -760,21 +795,27 @@ function downloadTemplate() {
 
 function parseCsv(text) {
   const clean = text.replace(/^\uFEFF/, '');
-  const lines = clean.split(/\r?\n/).filter(l => l.trim());
-  if (lines.length < 2) return { rows: [], skipped: 0 };
-  let skipped = 0;
-  const rows = lines.slice(1).map(line => {
-    const cols = [];
-    let cur = '', inQ = false;
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i];
-      if (ch === '"') {
-        if (inQ && line[i+1] === '"') { cur += '"'; i++; }
-        else inQ = !inQ;
-      } else if (ch === ',' && !inQ) { cols.push(cur.replace(/\\n/g, '\n')); cur = ''; }
-      else cur += ch;
+  // 전체 텍스트를 문자 단위로 파싱 — 쌍따옴표 안의 실제 줄바꿈 처리
+  const rows = [];
+  let row = [], cur = '', inQ = false, i = 0;
+  while (i < clean.length) {
+    const ch = clean[i];
+    if (ch === '"') {
+      if (inQ && clean[i+1] === '"') { cur += '"'; i += 2; continue; }
+      inQ = !inQ; i++; continue;
     }
-    cols.push(cur.replace(/\\n/g, '\n'));
+    if (!inQ) {
+      if (ch === ',') { row.push(cur); cur = ''; i++; continue; }
+      if (ch === '\r' && clean[i+1] === '\n') { row.push(cur); rows.push(row); row = []; cur = ''; i += 2; continue; }
+      if (ch === '\n') { row.push(cur); rows.push(row); row = []; cur = ''; i++; continue; }
+    }
+    cur += ch; i++;
+  }
+  if (cur || row.length) { row.push(cur); rows.push(row); }
+
+  if (rows.length < 2) return { rows: [], skipped: 0 };
+  let skipped = 0;
+  const parsed = rows.slice(1).map(cols => {
     const [a='', b='', tagsRaw='', doneRaw='0'] = cols;
     const tags = tagsRaw.trim() ? tagsRaw.split('|').map(t=>t.trim()).filter(Boolean) : [];
     return { a: a.trim(), b: b.trim(), tags, done: doneRaw.trim() === '1' };
@@ -783,7 +824,7 @@ function parseCsv(text) {
     skipped++;
     return false;
   });
-  return { rows, skipped };
+  return { rows: parsed, skipped };
 }
 function selectImportMode(mode) {
   importMode=mode;

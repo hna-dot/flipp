@@ -64,6 +64,7 @@ html, body { height: 100%; background: #f5f5f3; font-family: -apple-system, Blin
 .memorize-btn.active { background: #111; color: #fff; border-color: #111; }
 .shuffle-btn { padding: 13px 16px; font-size: 13px; font-weight: 500; border-radius: 14px; cursor: pointer; background: transparent; border: 0.5px solid #e0e0e0; color: #bbb; transition: all 0.15s; white-space: nowrap; flex-shrink: 0; }
 .shuffle-btn:hover { color: #111; border-color: #999; }
+.shuffle-btn.active { background: #111; color: #fff; border-color: #111; }
 
 .empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #999; font-size: 15px; text-align: center; }
 .empty-state .sub { font-size: 13px; color: #bbb; margin-top: 6px; }
@@ -283,9 +284,12 @@ function launchConfetti() {
 }
 
 let slideDir = ''; // 'left' | 'right' | ''
+let isShuffled = false; // 섞기 활성 여부
 function initDeck() {
   const active = getActive(studyFilter);
-  studyDeck = [...active].sort(() => Math.random() - 0.5).map(c => c.id);
+  studyDeck = isShuffled
+    ? [...active].sort(() => Math.random() - 0.5).map(c => c.id)
+    : active.map(c => c.id);
   deckCardIdx = 0; isBack = false;
 }
 
@@ -335,7 +339,9 @@ function renderStudy() {
       <button class="memorize-btn ${card.done?'active':''}" onclick="markMemorized(${card.id})">
         ${card.done ? '✓ 완벽히 외웠음' : '완벽히 외웠음'}
       </button>
-      <button class="shuffle-btn" onclick="reshuffleDeck()">↺ 섞기</button>
+      <button class="shuffle-btn ${isShuffled?'active':''}" onclick="toggleShuffle()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-2px;margin-right:5px;"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>랜덤
+      </button>
     </div>
   `;
   setupCardInteraction();
@@ -434,10 +440,10 @@ function slideCard(dir, callback) {
   card.style.opacity = '0';
   setTimeout(callback, 200);
 }
-function reshuffleDeck() {
-  const active = getActive(studyFilter);
-  studyDeck = [...active].sort(() => Math.random() - 0.5).map(c => c.id);
-  deckCardIdx = 0; isBack = false; renderStudy();
+function toggleShuffle() {
+  isShuffled = !isShuffled;
+  initDeck();
+  renderStudy();
 }
 function setStudyFilter(t) {
   studyFilter = t; initDeck(); renderStudy();

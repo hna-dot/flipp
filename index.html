@@ -102,7 +102,7 @@ html, body { height: 100%; background: #f5f5f3; font-family: -apple-system, Blin
 .icon-btn:hover { background: #f5f5f5; color: #111; }
 .icon-btn.danger:hover { color: #e24b4a; }
 @media (hover: none) and (pointer: coarse) {
-  .icon-btn { width: 30px; height: 30px; font-size: 14px; }
+  .icon-btn { width: 24px; height: 24px; font-size: 16px; }
 }
 
 /* MODAL - bottom sheet, 화면의 3/4 */
@@ -581,11 +581,8 @@ function openAdd() {
   modalTags=[]; tempTags=[]; showNewTagInput=false; renderModalTags();
   document.getElementById('modal').classList.remove('hidden');
   setupModalSwipe();
-  // 키보드 노출: requestAnimationFrame으로 렌더 후 즉시 포커싱
-  requestAnimationFrame(() => {
-    const fa = document.getElementById('f-a');
-    fa.focus(); fa.click();
-  });
+  // 모바일 키보드: 유저 제스처 체인 안에서 동기 호출
+  document.getElementById('f-a').focus();
 }
 function openEdit(id) {
   editingId=id;
@@ -657,10 +654,7 @@ function toggleNewTagInput() {
   document.getElementById('tag-input').value = '';
   renderModalTags();
   if (showNewTagInput) {
-    // 즉시 focus + 키보드 노출
-    const inp = document.getElementById('tag-input');
-    inp.focus();
-    inp.click();
+    document.getElementById('tag-input').focus();
   }
 }
 function confirmNewTag() {

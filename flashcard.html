@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Flipp</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Flipp">
+<meta name="application-name" content="Flipp">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📗</text></svg>">
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📗</text></svg>">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; background: #f5f5f3; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+.app { max-width: 480px; margin: 0 auto; background: #fff; display: flex; flex-direction: column; height: 100svh; height: 100vh; position: relative; overflow: hidden; }
+
+.tab-bar { display: flex; background: #fff; flex-shrink: 0; border-top: 0.5px solid #e8e8e8; }
+.tab-btn { flex: 1; padding: 14px 0 12px; font-size: 13px; font-weight: 500; background: none; border: none; cursor: pointer; color: #aaa; transition: color 0.15s; }
+.tab-btn.active { color: #111; }
+.tab-center { flex: 0 0 56px; display: flex; align-items: center; justify-content: center; border: none; background: none; cursor: pointer; border-left: 0.5px solid rgba(0,0,0,0.1); border-right: 0.5px solid rgba(0,0,0,0.1); font-size: 24px; font-weight: 300; color: #888; transition: color 0.15s; padding: 0; line-height: 1; }
+.tab-center:hover { color: #111; }
+
+#study-tab, #manage-tab { display: flex; flex-direction: column; flex: 1; min-height: 0; padding: 1.25rem 1.25rem 0; overflow: hidden; }
+.hidden { display: none !important; }
+
+.tag-scroll { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; margin-bottom: 1rem; scrollbar-width: none; flex-shrink: 0; }
+.tag-scroll::-webkit-scrollbar { display: none; }
+.tag-pill { display: inline-flex; align-items: center; font-size: 12px; padding: 5px 13px; border-radius: 99px; border: 0.5px solid #ddd; background: #fff; color: #888; cursor: pointer; white-space: nowrap; flex-shrink: 0; transition: all 0.15s; }
+.tag-pill.active { background: #111; color: #fff; border-color: #111; }
+
+.progress-row { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-bottom: 0.6rem; flex-shrink: 0; }
+.progress-bar-wrap { flex: 1; height: 3px; background: #eee; border-radius: 99px; }
+.progress-bar-fill { height: 100%; background: #111; border-radius: 99px; transition: width 0.3s; }
+.progress-count { font-size: 12px; color: #999; white-space: nowrap; }
+
+.card-area { position: relative; height: 340px; flex-shrink: 0; margin-bottom: 1rem; touch-action: pan-y; cursor: pointer; user-select: none; }
+.flashcard { position: absolute; inset: 0; background: #fff; border: 0.5px solid #e0e0e0; border-radius: 20px; padding: 2rem 1.75rem; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; }
+.flashcard.back { background: #111; border-color: #111; }
+.flashcard.back .card-content { color: #fff; }
+.flashcard.back .card-side-label { color: rgba(255,255,255,0.35); }
+.card-side-label { position: absolute; top: 1.1rem; right: 1.25rem; font-size: 11px; font-weight: 500; letter-spacing: 0.06em; color: #bbb; text-transform: uppercase; }
+.card-content { font-size: 18px; font-weight: 500; line-height: 1.7; color: #111; white-space: pre-wrap; word-break: break-word; }
+
+.action-row { display: flex; align-items: center; gap: 8px; flex-shrink: 0; margin-bottom: 1rem; }
+.memorize-btn { flex: 1; padding: 13px 0; font-size: 14px; font-weight: 500; border-radius: 14px; cursor: pointer; border: 0.5px solid #e0e0e0; background: #fff; color: #999; transition: all 0.2s; }
+.memorize-btn.active { background: #111; color: #fff; border-color: #111; }
+.shuffle-btn { padding: 13px 16px; font-size: 13px; font-weight: 500; border-radius: 14px; cursor: pointer; background: transparent; border: 0.5px solid #e0e0e0; color: #bbb; transition: all 0.15s; white-space: nowrap; flex-shrink: 0; }
+.shuffle-btn:hover { color: #111; border-color: #999; }
+
+.empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #999; font-size: 15px; text-align: center; }
+.empty-state .sub { font-size: 13px; color: #bbb; margin-top: 6px; }
+
+/* CELEBRATION OVERLAY */
+.celebration { position: absolute; inset: 0; background: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 2rem; z-index: 10; animation: fadeIn 0.4s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+.celebration .emoji-burst { font-size: 56px; margin-bottom: 1.25rem; animation: pop 0.5s cubic-bezier(.4,2,.6,1) both; }
+@keyframes pop { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.celebration .cele-title { font-size: 22px; font-weight: 500; color: #111; margin-bottom: 8px; }
+.celebration .cele-sub { font-size: 14px; color: #999; line-height: 1.6; }
+.celebration .cele-btn { margin-top: 2rem; padding: 14px 36px; border-radius: 14px; background: #111; color: #fff; border: none; font-size: 15px; font-weight: 500; cursor: pointer; transition: opacity 0.15s; }
+.celebration .cele-btn:hover { opacity: 0.85; }
+
+/* confetti canvas */
+#confetti-canvas { position: absolute; inset: 0; pointer-events: none; z-index: 11; }
+
+.manage-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-shrink: 0; }
+.manage-title { font-size: 16px; font-weight: 500; color: #111; }
+.mgr-btn { padding: 6px 12px; font-size: 12px; font-weight: 500; border-radius: 8px; border: 0.5px solid #e0e0e0; background: #fff; color: #555; cursor: pointer; transition: all 0.15s; }
+.mgr-btn:hover { background: #f5f5f5; color: #111; }
+.import-modal { background: #fff; border-radius: 20px 20px 0 0; padding: 1.25rem 1.25rem 2.5rem; width: 100%; max-width: 480px; }
+.import-option { display: flex; align-items: flex-start; gap: 12px; padding: 14px; border: 0.5px solid #e0e0e0; border-radius: 12px; cursor: pointer; transition: all 0.15s; margin-bottom: 8px; }
+.import-option:hover { border-color: #aaa; background: #fafafa; }
+.import-option.selected { border-color: #111; background: #fafafa; }
+.import-option-radio { width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid #ddd; flex-shrink: 0; margin-top: 1px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+.import-option.selected .import-option-radio { border-color: #111; background: #111; }
+.import-option.selected .import-option-radio::after { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #fff; display: block; }
+.import-option-text .opt-title { font-size: 14px; font-weight: 500; color: #111; margin-bottom: 3px; }
+.import-option-text .opt-desc { font-size: 12px; color: #999; line-height: 1.5; }
+.manage-list-wrap { flex: 1; overflow-y: auto; min-height: 0; padding-bottom: 1rem; scrollbar-width: thin; }
+.manage-list-wrap::-webkit-scrollbar { width: 3px; }
+.manage-list-wrap::-webkit-scrollbar-thumb { background: #ddd; border-radius: 99px; }
+.card-list { display: flex; flex-direction: column; gap: 8px; }
+.card-item { background: #fff; border: 0.5px solid #e0e0e0; border-radius: 14px; padding: 11px 12px; display: flex; align-items: flex-start; gap: 8px; transition: opacity 0.15s; }
+.card-item.done { opacity: 0.4; }
+.card-item.dragging { opacity: 0.2; }
+.card-item.drag-over { border-color: #999; background: #fafafa; }
+.drag-handle { color: #ccc; cursor: grab; font-size: 15px; flex-shrink: 0; margin-top: 2px; line-height: 1; }
+.drag-handle:active { cursor: grabbing; }
+.check-box { width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid #ddd; flex-shrink: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; margin-top: 2px; transition: all 0.15s; }
+.check-box.checked { background: #111; border-color: #111; }
+.card-texts { flex: 1; min-width: 0; }
+.card-a { font-size: 13px; font-weight: 500; color: #111; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+.card-b { font-size: 12px; color: #888; line-height: 1.5; margin-top: 2px; white-space: pre-wrap; word-break: break-word; }
+.item-actions { display: flex; gap: 2px; flex-shrink: 0; }
+.icon-btn { width: 28px; height: 28px; border: none; background: none; cursor: pointer; color: #ccc; border-radius: 6px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; font-size: 13px; }
+.icon-btn:hover { background: #f5f5f5; color: #111; }
+.icon-btn.danger:hover { color: #e24b4a; }
+
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: flex-end; justify-content: center; z-index: 200; }
+.modal { background: #fff; border-radius: 20px 20px 0 0; padding: 1.25rem 1.25rem 2.5rem; width: 100%; max-width: 480px; max-height: 88vh; overflow-y: auto; }
+.modal-handle { width: 36px; height: 4px; background: #ddd; border-radius: 99px; margin: 0 auto 1.25rem; }
+.modal-title { font-size: 15px; font-weight: 500; color: #111; margin-bottom: 1rem; }
+.modal label { font-size: 11px; font-weight: 500; color: #999; text-transform: uppercase; letter-spacing: 0.06em; display: block; margin-bottom: 5px; }
+.modal textarea { width: 100%; border: 0.5px solid #e0e0e0; border-radius: 10px; padding: 9px 11px; font-size: 14px; font-family: inherit; resize: none; background: #fafafa; color: #111; margin-bottom: 14px; outline: none; transition: border-color 0.15s; }
+.modal textarea:focus { border-color: #aaa; }
+.tag-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+.tag-toggle { display: inline-flex; align-items: center; font-size: 13px; padding: 6px 13px; border-radius: 99px; border: 0.5px solid #e0e0e0; background: #fafafa; color: #888; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+.tag-toggle.on { background: #111; color: #fff; border-color: #111; }
+.tag-add-btn { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; border: 0.5px dashed #ccc; background: transparent; color: #ccc; cursor: pointer; font-size: 20px; font-weight: 300; transition: all 0.15s; line-height: 1; }
+.tag-add-btn:hover { border-color: #888; color: #888; }
+.new-tag-wrap { display: flex; gap: 6px; margin-bottom: 10px; }
+.new-tag-wrap input { flex: 1; border: 0.5px solid #e0e0e0; border-radius: 10px; padding: 8px 11px; font-size: 13px; font-family: inherit; background: #fafafa; color: #111; outline: none; }
+.new-tag-wrap input:focus { border-color: #aaa; }
+.new-tag-wrap button { padding: 8px 14px; border-radius: 10px; font-size: 13px; font-weight: 500; cursor: pointer; background: #111; color: #fff; border: none; }
+.modal-footer { display: flex; gap: 8px; }
+.modal-footer button { flex: 1; padding: 13px; border-radius: 12px; font-size: 14px; font-weight: 500; cursor: pointer; }
+.btn-cancel { background: #f5f5f5; border: none; color: #111; }
+.btn-save { background: #111; color: #fff; border: none; }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <div id="study-tab"></div>
+  <div id="manage-tab" class="hidden"></div>
+  <div class="tab-bar">
+    <button class="tab-btn active" id="tb-study" onclick="switchTab('study')">학습</button>
+    <button class="tab-center" onclick="openAdd()">+</button>
+    <button class="tab-btn" id="tb-manage" onclick="switchTab('manage')">관리</button>
+  </div>
+</div>
+
+<canvas id="confetti-canvas"></canvas>
+
+<div class="modal-overlay hidden" id="modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <p class="modal-title" id="modal-title">문장 추가</p>
+    <label>앞면 (A)</label>
+    <textarea id="f-a" rows="3" placeholder="앞면에 표시할 문장"></textarea>
+    <label>뒷면 (B)</label>
+    <textarea id="f-b" rows="3" placeholder="뒷면에 표시할 문장"></textarea>
+    <label>태그</label>
+    <div class="tag-row" id="tag-row"></div>
+    <div class="new-tag-wrap hidden" id="new-tag-wrap">
+      <input type="text" id="tag-input" placeholder="새 태그 이름" onkeydown="if(event.key==='Enter')confirmNewTag()">
+      <button onclick="confirmNewTag()">확인</button>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeModal()">취소</button>
+      <button class="btn-save" onclick="saveCard()">저장</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── STORAGE ────────────────────────────────────────────────────────────────
+const STORAGE_KEY = 'flashcard_data_v1';
+function loadData() {
+  try { const r = localStorage.getItem(STORAGE_KEY); if (r) return JSON.parse(r); } catch(e) {}
+  return {
+    cards: [
+      {id:1,a:"He said it like 'Bruhh what are you doing?' in that sarcastic tone.",b:"I can totally hear him",tags:["영어"],done:false},
+      {id:2,a:"How did you get him to do that?\n- 걔가 하게 만들 방법을 생각해냈어",b:"I came up with a way to get him to do it",tags:["영어"],done:false},
+      {id:3,a:"My friend said the café has a robot making coffee\n- (믿기 힘들어서) 내가 직접 확인해봐야 했어",b:"I just had to see it for myself",tags:["영어"],done:false},
+      {id:4,a:"근처 새로 생긴 카페 갔다음 / 너도 좋아할 듯",b:"I went to a newly opened cafe nearby. I think you'd like it.",tags:["영어"],done:false}
+    ], nextId: 5
+  };
+}
+function saveData() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify({cards, nextId})); } catch(e) {} }
+
+let {cards, nextId} = loadData();
+let currentTab = 'study';
+let studyFilter = '전체';
+let manageFilter = '전체';
+let studyDeck = [];
+let deckCardIdx = 0;
+let isBack = false;
+let editingId = null;
+let modalTags = [];
+let showNewTagInput = false;
+let dragSrcIdx = null;
+let touchStartX = 0;
+
+// ── HELPERS ────────────────────────────────────────────────────────────────
+function allTags() { const s=new Set(); cards.forEach(c=>c.tags.forEach(t=>s.add(t))); return Array.from(s); }
+function filteredCards(f) { return f==='전체'?[...cards]:cards.filter(c=>c.tags.includes(f)); }
+function getActive(f) { return filteredCards(f).filter(c=>!c.done); }
+function esc(s) { return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>'); }
+
+// ── CONFETTI ───────────────────────────────────────────────────────────────
+function launchConfetti() {
+  const canvas = document.getElementById('confetti-canvas');
+  const app = document.getElementById('app');
+  const rect = app.getBoundingClientRect();
+  canvas.style.position = 'fixed';
+  canvas.style.left = rect.left + 'px';
+  canvas.style.top = rect.top + 'px';
+  canvas.width = rect.width;
+  canvas.height = rect.height;
+  canvas.style.width = rect.width + 'px';
+  canvas.style.height = rect.height + 'px';
+  canvas.style.pointerEvents = 'none';
+  canvas.style.zIndex = '999';
+  const ctx = canvas.getContext('2d');
+  const colors = ['#111','#888','#ccc','#555','#333','#aaa'];
+  const pieces = Array.from({length: 80}, () => ({
+    x: Math.random() * rect.width,
+    y: -10 - Math.random() * 100,
+    w: 6 + Math.random() * 6,
+    h: 10 + Math.random() * 8,
+    color: colors[Math.floor(Math.random() * colors.length)],
+    vx: (Math.random() - 0.5) * 4,
+    vy: 2 + Math.random() * 4,
+    rot: Math.random() * Math.PI * 2,
+    vrot: (Math.random() - 0.5) * 0.2,
+    opacity: 1
+  }));
+  let frame = 0;
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    pieces.forEach(p => {
+      p.x += p.vx; p.y += p.vy; p.rot += p.vrot;
+      if (frame > 60) p.opacity -= 0.018;
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, p.opacity);
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.w/2, -p.h/2, p.w, p.h);
+      ctx.restore();
+    });
+    frame++;
+    if (frame < 120) requestAnimationFrame(draw);
+    else ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+  draw();
+}
+
+// ── DECK ───────────────────────────────────────────────────────────────────
+function initDeck() {
+  const active = getActive(studyFilter);
+  studyDeck = [...active].sort(() => Math.random() - 0.5).map(c => c.id);
+  deckCardIdx = 0; isBack = false;
+}
+
+// ── TAB SWITCH ─────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  currentTab = tab;
+  document.getElementById('study-tab').classList.toggle('hidden', tab !== 'study');
+  document.getElementById('manage-tab').classList.toggle('hidden', tab !== 'manage');
+  document.getElementById('tb-study').classList.toggle('active', tab === 'study');
+  document.getElementById('tb-manage').classList.toggle('active', tab === 'manage');
+  if (tab === 'study') { if (studyDeck.length === 0) initDeck(); renderStudy(); }
+  else renderManage();
+}
+
+// ── STUDY ──────────────────────────────────────────────────────────────────
+function renderStudy() {
+  const el = document.getElementById('study-tab');
+  const tags = allTags();
+  const tagBar = `<div class="tag-scroll">${['전체',...tags].map(t=>`<div class="tag-pill ${studyFilter===t?'active':''}" onclick="setStudyFilter('${esc(t)}')">${esc(t)}</div>`).join('')}</div>`;
+  const filtered = filteredCards(studyFilter);
+
+  if (filtered.length === 0) {
+    el.innerHTML = tagBar + `<div class="empty-state"><p>문장이 없습니다</p><p class="sub">+ 버튼으로 추가해보세요</p></div>`;
+    return;
+  }
+  if (studyDeck.length === 0) initDeck();
+  if (studyDeck.length === 0) {
+    showCelebration(el, tagBar, filtered.length);
+    return;
+  }
+  if (deckCardIdx >= studyDeck.length) deckCardIdx = 0;
+  const cardId = studyDeck[deckCardIdx];
+  const card = cards.find(c => c.id === cardId);
+  if (!card) { studyDeck = studyDeck.filter(id => cards.find(c=>c.id===id)); if(!studyDeck.length){initDeck();} deckCardIdx=0; renderStudy(); return; }
+
+  const progress = studyDeck.length > 1 ? (deckCardIdx / (studyDeck.length - 1)) * 100 : 100;
+
+  el.innerHTML = tagBar + `
+    <div class="progress-row">
+      <div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:${progress}%"></div></div>
+      <span class="progress-count">${deckCardIdx + 1} / ${studyDeck.length}</span>
+    </div>
+    <div class="card-area" id="card-area">
+      <div class="flashcard ${isBack?'back':''}">
+        <span class="card-side-label">${isBack ? '뒷면' : '앞면'}</span>
+        <div class="card-content">${escHtml(isBack ? card.b : card.a)}</div>
+      </div>
+    </div>
+    <div class="action-row">
+      <button class="memorize-btn ${card.done?'active':''}" onclick="markMemorized(${card.id})">
+        ${card.done ? '✓ 완벽히 외웠음' : '완벽히 외웠음'}
+      </button>
+      <button class="shuffle-btn" onclick="reshuffleDeck()">↺ 섞기</button>
+    </div>
+  `;
+  setupCardInteraction();
+}
+
+function showCelebration(el, tagBar, total) {
+  el.innerHTML = tagBar + `
+    <div class="celebration" id="celebration">
+      <div class="emoji-burst">🎉</div>
+      <div class="cele-title">모두 완료했어요!</div>
+      <div class="cele-sub">${total}장을 모두 넘겼어요!<br>다시 섞어서 복습해볼까요?</div>
+      <button class="cele-btn" onclick="restartDeck()">다시 섞기</button>
+    </div>
+  `;
+  launchConfetti();
+}
+
+function restartDeck() {
+  initDeck();
+  renderStudy();
+}
+
+function markMemorized(id) {
+  const wasDone = cards.find(c=>c.id===id)?.done;
+  cards = cards.map(c => c.id===id ? {...c, done:!wasDone} : c);
+  saveData();
+  if (!wasDone) {
+    isBack = false;
+    const next = deckCardIdx + 1;
+    // 마지막 카드였으면 → 덱 재계산 후 비어있으면 축하
+    if (next >= studyDeck.length) {
+      const remaining = getActive(studyFilter);
+      if (remaining.length === 0) { studyDeck = []; deckCardIdx = 0; renderStudy(); return; }
+      deckCardIdx = 0;
+    } else {
+      deckCardIdx = next;
+    }
+  }
+  renderStudy();
+}
+
+function setupCardInteraction() {
+  const area = document.getElementById('card-area');
+  if (!area) return;
+  area.addEventListener('touchstart', e => { touchStartX = e.touches[0].clientX; }, {passive:true});
+  area.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    if (Math.abs(dx) > 40) { dx < 0 ? goNext() : goPrev(); }
+  }, {passive:true});
+  area.addEventListener('click', e => {
+    const rect = area.getBoundingClientRect();
+    e.clientX - rect.left >= rect.width / 2 ? goNext() : goPrev();
+  });
+}
+
+function goNext() {
+  if (!isBack) {
+    isBack = true;
+    renderStudy();
+  } else {
+    // 마지막 카드 뒷면에서 넘기면 → 축하
+    if (deckCardIdx === studyDeck.length - 1) {
+      isBack = false;
+      deckCardIdx = 0;
+      const el = document.getElementById('study-tab');
+      const tags = allTags();
+      const tagBar = `<div class="tag-scroll">${['전체',...allTags()].map(t=>`<div class="tag-pill ${studyFilter===t?'active':''}" onclick="setStudyFilter('${esc(t)}')">${esc(t)}</div>`).join('')}</div>`;
+      showCelebration(el, tagBar, studyDeck.length);
+    } else {
+      isBack = false;
+      deckCardIdx++;
+      renderStudy();
+    }
+  }
+}
+function goPrev() {
+  if (isBack) { isBack = false; }
+  else { deckCardIdx = (deckCardIdx - 1 + studyDeck.length) % studyDeck.length; isBack = true; }
+  renderStudy();
+}
+function reshuffleDeck() {
+  const active = getActive(studyFilter);
+  studyDeck = [...active].sort(() => Math.random() - 0.5).map(c => c.id);
+  deckCardIdx = 0; isBack = false; renderStudy();
+}
+function setStudyFilter(t) { studyFilter = t; initDeck(); renderStudy(); }
+
+// ── MANAGE ─────────────────────────────────────────────────────────────────
+function renderManage() {
+  const el = document.getElementById('manage-tab');
+  const tags = allTags();
+  const list = filteredCards(manageFilter);
+  el.innerHTML = `
+    <div class="manage-top">
+      <span class="manage-title">문장 <span style="color:#999;font-weight:400">(${list.length})</span></span>
+      <div style="display:flex;gap:6px;">
+        <button class="mgr-btn" onclick="exportCards()">내보내기</button>
+        <button class="mgr-btn" onclick="triggerImport()">불러오기</button>
+      </div>
+    </div>
+    <input type="file" id="import-input" accept=".json" style="display:none" onchange="handleImportFile(event)">
+    <div class="tag-scroll">${['전체',...tags].map(t=>`<div class="tag-pill ${manageFilter===t?'active':''}" onclick="setManageFilter('${esc(t)}')">${esc(t)}</div>`).join('')}</div>
+    <div class="manage-list-wrap">
+      <div class="card-list">
+        ${list.length === 0
+          ? `<div style="text-align:center;padding:3rem 1rem;color:#999;font-size:14px;">문장이 없습니다</div>`
+          : list.map((c,i)=>`
+          <div class="card-item ${c.done?'done':''}" draggable="true" data-id="${c.id}"
+            ondragstart="dStart(event,${i})" ondragover="dOver(event,${i})" ondrop="dDrop(event,${i})" ondragend="dEnd()">
+            <span class="drag-handle">⠿</span>
+            <div class="check-box ${c.done?'checked':''}" onclick="toggleDone(${c.id})">
+              ${c.done?`<svg viewBox="0 0 10 10" width="10" height="10"><polyline points="1.5,5 4,7.5 8.5,2.5" stroke="white" stroke-width="2.5" fill="none"/></svg>`:''}
+            </div>
+            <div class="card-texts">
+              <div class="card-a">${escHtml(c.a)}</div>
+              <div class="card-b">${escHtml(c.b)}</div>
+            </div>
+            <div class="item-actions">
+              <button class="icon-btn" onclick="openEdit(${c.id})">✎</button>
+              <button class="icon-btn danger" onclick="deleteCard(${c.id})">✕</button>
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function setManageFilter(t) { manageFilter = t; renderManage(); }
+function toggleDone(id) { cards = cards.map(c => c.id===id ? {...c, done:!c.done} : c); saveData(); renderManage(); }
+function deleteCard(id) {
+  if (!confirm('삭제할까요?')) return;
+  cards = cards.filter(c => c.id!==id);
+  studyDeck = studyDeck.filter(sid => sid !== id);
+  if (studyDeck.length > 0 && deckCardIdx >= studyDeck.length) deckCardIdx = 0;
+  saveData(); renderManage();
+}
+function dStart(e,idx) { dragSrcIdx=idx; setTimeout(()=>{ const els=document.querySelectorAll('.card-item'); if(els[idx]) els[idx].classList.add('dragging'); },0); e.dataTransfer.effectAllowed='move'; }
+function dOver(e,idx) { e.preventDefault(); document.querySelectorAll('.card-item').forEach((el,i)=>el.classList.toggle('drag-over',i===idx&&i!==dragSrcIdx)); }
+function dDrop(e,idx) {
+  e.preventDefault();
+  if (dragSrcIdx===null||dragSrcIdx===idx) return;
+  const list=filteredCards(manageFilter);
+  const srcId=list[dragSrcIdx].id, dstId=list[idx].id;
+  const si=cards.findIndex(c=>c.id===srcId);
+  const [moved]=cards.splice(si,1);
+  const di=cards.findIndex(c=>c.id===dstId);
+  cards.splice(idx<dragSrcIdx?di:di+1,0,moved);
+  dragSrcIdx=null; saveData(); renderManage();
+}
+function dEnd() { dragSrcIdx=null; document.querySelectorAll('.card-item').forEach(el=>el.classList.remove('dragging','drag-over')); }
+
+// ── MODAL ──────────────────────────────────────────────────────────────────
+function openAdd() {
+  editingId=null;
+  document.getElementById('modal-title').textContent='문장 추가';
+  document.getElementById('f-a').value=''; document.getElementById('f-b').value='';
+  modalTags=[]; showNewTagInput=false; renderModalTags();
+  document.getElementById('modal').classList.remove('hidden');
+  setTimeout(()=>document.getElementById('f-a').focus(),100);
+}
+function openEdit(id) {
+  editingId=id;
+  const c=cards.find(c=>c.id===id);
+  document.getElementById('modal-title').textContent='문장 수정';
+  document.getElementById('f-a').value=c.a; document.getElementById('f-b').value=c.b;
+  modalTags=[...c.tags]; showNewTagInput=false; renderModalTags();
+  document.getElementById('modal').classList.remove('hidden');
+}
+function closeModal() { document.getElementById('modal').classList.add('hidden'); }
+document.getElementById('modal').addEventListener('click', e => { if(e.target===document.getElementById('modal')) closeModal(); });
+
+function renderModalTags() {
+  const existing=allTags();
+  document.getElementById('tag-row').innerHTML=
+    existing.map(t=>`<div class="tag-toggle ${modalTags.includes(t)?'on':''}" onclick="toggleModalTag('${esc(t)}')">${esc(t)}</div>`).join('')+
+    `<button class="tag-add-btn" onclick="toggleNewTagInput()">+</button>`;
+  document.getElementById('new-tag-wrap').classList.toggle('hidden',!showNewTagInput);
+  if (showNewTagInput) setTimeout(()=>document.getElementById('tag-input').focus(),50);
+}
+function toggleModalTag(t) { modalTags=modalTags.includes(t)?modalTags.filter(x=>x!==t):[...modalTags,t]; renderModalTags(); }
+function toggleNewTagInput() { showNewTagInput=!showNewTagInput; document.getElementById('tag-input').value=''; renderModalTags(); }
+function confirmNewTag() {
+  const val=document.getElementById('tag-input').value.trim();
+  if (val&&!modalTags.includes(val)) modalTags.push(val);
+  showNewTagInput=false; document.getElementById('tag-input').value=''; renderModalTags();
+}
+function saveCard() {
+  const a=document.getElementById('f-a').value.trim(), b=document.getElementById('f-b').value.trim();
+  if (!a||!b) { alert('앞면과 뒷면을 모두 입력해주세요.'); return; }
+  if (editingId) { cards=cards.map(c=>c.id===editingId?{...c,a,b,tags:modalTags}:c); }
+  else { cards.push({id:nextId++,a,b,tags:modalTags,done:false}); }
+  saveData(); closeModal();
+  if (currentTab==='manage') renderManage(); else { initDeck(); renderStudy(); }
+}
+
+// ── EXPORT ─────────────────────────────────────────────────────────────────
+function exportCards() {
+  const data = {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    cards: cards.map(c => ({ a: c.a, b: c.b, tags: c.tags, done: c.done }))
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const date = new Date().toISOString().slice(0,10);
+  a.href = url; a.download = `flashcard_${date}.json`;
+  a.click(); URL.revokeObjectURL(url);
+}
+
+// ── IMPORT ─────────────────────────────────────────────────────────────────
+let pendingImportData = null;
+let importMode = 'merge';
+
+function triggerImport() {
+  const input = document.getElementById('import-input');
+  input.value = ''; input.click();
+}
+
+function handleImportFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (!data.cards || !Array.isArray(data.cards)) throw new Error('invalid');
+      pendingImportData = data;
+      importMode = 'merge';
+      document.getElementById('import-file-info').textContent = `${file.name} · ${data.cards.length}개 문장`;
+      selectImportMode('merge');
+      document.getElementById('import-modal').classList.remove('hidden');
+    } catch(err) {
+      alert('올바른 파일이 아니에요. flashcard_*.json 파일을 선택해주세요.');
+    }
+  };
+  reader.readAsText(file);
+}
+
+function selectImportMode(mode) {
+  importMode = mode;
+  document.getElementById('opt-merge').classList.toggle('selected', mode === 'merge');
+  document.getElementById('opt-replace').classList.toggle('selected', mode === 'replace');
+}
+
+function closeImportModal() {
+  document.getElementById('import-modal').classList.add('hidden');
+  pendingImportData = null;
+}
+
+function confirmImport() {
+  if (!pendingImportData) return;
+  const incoming = pendingImportData.cards.map(c => ({
+    id: nextId++,
+    a: String(c.a || '').trim(),
+    b: String(c.b || '').trim(),
+    tags: Array.isArray(c.tags) ? c.tags : [],
+    done: !!c.done
+  })).filter(c => c.a && c.b);
+
+  if (importMode === 'replace') {
+    cards = incoming;
+  } else {
+    // 병합: 앞면+뒷면이 완전히 같은 경우 중복 제거
+    const existing = new Set(cards.map(c => c.a + '\x00' + c.b));
+    const fresh = incoming.filter(c => !existing.has(c.a + '\x00' + c.b));
+    cards = [...cards, ...fresh];
+    if (fresh.length < incoming.length) {
+      const skipped = incoming.length - fresh.length;
+      setTimeout(() => alert(`${fresh.length}개 추가, ${skipped}개 중복 건너뜀`), 100);
+    }
+  }
+
+  saveData(); closeImportModal();
+  initDeck(); renderManage();
+  if (currentTab === 'study') renderStudy();
+}
+
+document.addEventListener('keydown', e => {
+  if (document.getElementById('modal').classList.contains('hidden') && currentTab==='study') {
+    if (e.key==='ArrowRight') goNext();
+    if (e.key==='ArrowLeft') goPrev();
+  }
+  if (e.key==='Escape') { closeModal(); closeImportModal(); }
+});
+
+initDeck();
+renderStudy();
+</script>
+<!-- IMPORT MODE MODAL -->
+<div class="modal-overlay hidden" id="import-modal" onclick="if(event.target===this)closeImportModal()">
+  <div class="import-modal">
+    <div class="modal-handle"></div>
+    <p class="modal-title" style="margin-bottom:6px;">불러오기 방식</p>
+    <p style="font-size:13px;color:#999;margin-bottom:1rem;" id="import-file-info"></p>
+    <div class="import-option selected" id="opt-merge" onclick="selectImportMode('merge')">
+      <div class="import-option-radio"></div>
+      <div class="import-option-text">
+        <div class="opt-title">병합</div>
+        <div class="opt-desc">기존 문장은 유지하고 파일의 문장을 추가해요.<br>중복 문장(앞면+뒷면이 같은 경우)은 건너뜁니다.</div>
+      </div>
+    </div>
+    <div class="import-option" id="opt-replace" onclick="selectImportMode('replace')">
+      <div class="import-option-radio"></div>
+      <div class="import-option-text">
+        <div class="opt-title">덮어쓰기</div>
+        <div class="opt-desc">기존 문장을 모두 삭제하고 파일의 문장으로 교체해요.</div>
+      </div>
+    </div>
+    <div class="modal-footer" style="margin-top:1.25rem;">
+      <button class="btn-cancel" onclick="closeImportModal()">취소</button>
+      <button class="btn-save" onclick="confirmImport()">불러오기</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -16,17 +16,15 @@ html, body { height: 100%; background: #f5f5f3; font-family: -apple-system, Blin
 .app {
   max-width: 480px; margin: 0 auto; background: #fff;
   display: flex; flex-direction: column;
-  /* 하단 주소창 위로 올라가도록 safe-area 활용 */
-  height: calc(100vh - env(safe-area-inset-bottom, 0px));
-  height: calc(100dvh - env(safe-area-inset-bottom, 0px));
+  height: 100vh; height: 100dvh;
   position: relative; overflow: hidden;
 }
 
-/* TAB BAR - 하단 safe area 위에 배치 */
+/* TAB BAR - safe-area는 padding-bottom으로 처리 */
 .tab-bar {
   display: flex; background: #fff; flex-shrink: 0;
   border-top: 0.5px solid #e8e8e8;
-  margin-bottom: env(safe-area-inset-bottom, 8px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 .tab-btn { flex: 1; padding: 14px 0 12px; font-size: 13px; font-weight: 500; background: none; border: none; cursor: pointer; color: #aaa; transition: color 0.15s; }
 .tab-btn.active { color: #111; }
@@ -423,12 +421,15 @@ function renderManage() {
       <div style="position:relative;">
         <button class="mgr-menu-btn" id="mgr-menu-btn" onclick="toggleMgrMenu(event)">···</button>
         <div class="mgr-dropdown hidden" id="mgr-dropdown">
-          <button class="mgr-dropdown-item" onclick="exportCards();closeMgrMenu()">내보내기</button>
+          <button class="mgr-dropdown-item" onclick="exportCards('json');closeMgrMenu()">내보내기 (JSON)</button>
+          <button class="mgr-dropdown-item" onclick="exportCards('csv');closeMgrMenu()">내보내기 (CSV)</button>
+          <div style="height:0.5px;background:#f0f0f0;margin:4px 0;"></div>
           <button class="mgr-dropdown-item" onclick="triggerImport();closeMgrMenu()">불러오기</button>
+          <button class="mgr-dropdown-item" onclick="downloadTemplate();closeMgrMenu()">CSV 양식 받기</button>
         </div>
       </div>
     </div>
-    <input type="file" id="import-input" accept=".json" style="display:none" onchange="handleImportFile(event)">
+    <input type="file" id="import-input" accept=".json,.csv" style="display:none" onchange="handleImportFile(event)">
     <div class="tag-scroll">${['전체',...tags].map(t=>`<div class="tag-pill ${manageFilter===t?'active':''}" onclick="setManageFilter('${esc(t)}')">${esc(t)}</div>`).join('')}</div>
     <div class="manage-list-wrap">
       <div class="card-list" id="card-list">
@@ -677,31 +678,112 @@ function saveCard() {
 }
 
 // ── EXPORT / IMPORT ────────────────────────────────────────────────────────
-function exportCards() {
-  const data = { version:1, exportedAt:new Date().toISOString(), cards:cards.map(c=>({a:c.a,b:c.b,tags:c.tags,done:c.done})) };
-  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+function exportCards(format = 'json') {
+  const date = new Date().toISOString().slice(0, 10);
+  let blob, filename;
+  if (format === 'csv') {
+    const csvEsc = s => '"' + String(s).replace(/"/g, '""').replace(/\n/g, '\\n') + '"';
+    const rows = [['앞면(A)', '뒷면(B)', '태그', '외웠음'].map(csvEsc).join(',')];
+    cards.forEach(c => {
+      rows.push([c.a, c.b, c.tags.join('|'), c.done ? '1' : '0'].map(csvEsc).join(','));
+    });
+    blob = new Blob(['\uFEFF' + rows.join('\r\n')], {type: 'text/csv;charset=utf-8'});
+    filename = `flipp_${date}.csv`;
+  } else {
+    const data = { version:1, exportedAt:new Date().toISOString(), cards:cards.map(c=>({a:c.a,b:c.b,tags:c.tags,done:c.done})) };
+    blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+    filename = `flipp_${date}.json`;
+  }
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href=url; a.download=`flipp_${new Date().toISOString().slice(0,10)}.json`;
+  a.href = url; a.download = filename;
   a.click(); URL.revokeObjectURL(url);
 }
 
 let pendingImportData=null, importMode='merge';
 function triggerImport() { const i=document.getElementById('import-input'); i.value=''; i.click(); }
+
 function handleImportFile(e) {
-  const file=e.target.files[0]; if(!file) return;
-  const reader=new FileReader();
-  reader.onload=ev=>{
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
     try {
-      const data=JSON.parse(ev.target.result);
-      if(!data.cards||!Array.isArray(data.cards)) throw new Error();
-      pendingImportData=data; importMode='merge';
-      document.getElementById('import-file-info').textContent=`${file.name} · ${data.cards.length}개 문장`;
+      const text = ev.target.result;
+      let parsed;
+      if (file.name.endsWith('.csv')) {
+        const { rows, skipped } = parseCsv(text);
+        if (rows.length === 0) {
+          if (skipped > 0) {
+            alert(`불러오기 실패\n\n앞면(A)과 뒷면(B)은 필수 항목이에요.\n${skipped}개 행 모두 필수 항목이 비어있어요.\n\n양식을 다시 확인해주세요.`);
+          } else {
+            alert('올바른 파일이 아니에요.\nFlipp 양식에 맞는 CSV 파일을 선택해주세요.');
+          }
+          return;
+        }
+        if (skipped > 0) {
+          // 일부 행만 유효한 경우 계속 진행 (경고는 confirmImport에서 표시)
+        }
+        parsed = rows;
+        pendingImportData = { cards: parsed, skipped };
+      } else {
+        const data = JSON.parse(text);
+        if (!data.cards || !Array.isArray(data.cards)) throw new Error();
+        parsed = data.cards;
+        pendingImportData = { cards: parsed, skipped: 0 };
+      }
+      if (!parsed.length) throw new Error('empty');
+      importMode = 'merge';
+      const info = pendingImportData.skipped > 0
+        ? `${file.name} · ${parsed.length}개 문장 (${pendingImportData.skipped}개 행 건너뜀 — 필수 항목 누락)`
+        : `${file.name} · ${parsed.length}개 문장`;
+      document.getElementById('import-file-info').textContent = info;
       selectImportMode('merge');
       document.getElementById('import-modal').classList.remove('hidden');
-    } catch(err) { alert('올바른 파일이 아니에요.'); }
+    } catch(err) {
+      alert('올바른 파일이 아니에요.\nJSON 또는 Flipp에서 내보낸 CSV 파일을 선택해주세요.');
+    }
   };
   reader.readAsText(file);
+}
+
+function downloadTemplate() {
+  // 헤더: 필수(*) / 선택 구분
+  const header = [
+    '앞면_A_필수', '뒷면_B_필수', '태그_선택(여러개는|로구분)', '외웠음_선택(0또는1)'
+  ].map(h => '"' + h + '"').join(',');
+  const blob = new Blob(['\uFEFF' + header + '\r\n'], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'flipp_template.csv';
+  a.click(); URL.revokeObjectURL(url);
+}
+
+function parseCsv(text) {
+  const clean = text.replace(/^\uFEFF/, '');
+  const lines = clean.split(/\r?\n/).filter(l => l.trim());
+  if (lines.length < 2) return { rows: [], skipped: 0 };
+  let skipped = 0;
+  const rows = lines.slice(1).map(line => {
+    const cols = [];
+    let cur = '', inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (inQ && line[i+1] === '"') { cur += '"'; i++; }
+        else inQ = !inQ;
+      } else if (ch === ',' && !inQ) { cols.push(cur.replace(/\\n/g, '\n')); cur = ''; }
+      else cur += ch;
+    }
+    cols.push(cur.replace(/\\n/g, '\n'));
+    const [a='', b='', tagsRaw='', doneRaw='0'] = cols;
+    const tags = tagsRaw.trim() ? tagsRaw.split('|').map(t=>t.trim()).filter(Boolean) : [];
+    return { a: a.trim(), b: b.trim(), tags, done: doneRaw.trim() === '1' };
+  }).filter(c => {
+    if (c.a && c.b) return true;
+    skipped++;
+    return false;
+  });
+  return { rows, skipped };
 }
 function selectImportMode(mode) {
   importMode=mode;

@@ -76,8 +76,12 @@ html, body { height: 100%; background: #f5f5f3; font-family: -apple-system, Blin
 /* MANAGE */
 .manage-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-shrink: 0; }
 .manage-title { font-size: 16px; font-weight: 500; color: #111; }
-.mgr-btn { padding: 6px 12px; font-size: 12px; font-weight: 500; border-radius: 8px; border: 0.5px solid #e0e0e0; background: #fff; color: #555; cursor: pointer; transition: all 0.15s; }
-.mgr-btn:hover { background: #f5f5f5; color: #111; }
+.mgr-menu-btn { width: 32px; height: 32px; border-radius: 8px; border: 0.5px solid #e0e0e0; background: #fff; color: #555; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; position: relative; }
+.mgr-menu-btn:hover { background: #f5f5f5; }
+.mgr-dropdown { position: absolute; top: calc(100% + 6px); right: 0; background: #fff; border: 0.5px solid #e0e0e0; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.1); min-width: 130px; z-index: 100; overflow: hidden; }
+.mgr-dropdown.hidden { display: none; }
+.mgr-dropdown-item { display: block; width: 100%; padding: 11px 16px; font-size: 13px; font-weight: 500; color: #333; background: none; border: none; cursor: pointer; text-align: left; transition: background 0.1s; }
+.mgr-dropdown-item:hover { background: #f5f5f5; }
 .manage-list-wrap { flex: 1; overflow-y: auto; min-height: 0; padding-bottom: 1rem; scrollbar-width: thin; }
 .manage-list-wrap::-webkit-scrollbar { width: 3px; }
 .manage-list-wrap::-webkit-scrollbar-thumb { background: #ddd; border-radius: 99px; }
@@ -86,22 +90,19 @@ html, body { height: 100%; background: #f5f5f3; font-family: -apple-system, Blin
 .card-item.done { opacity: 0.4; }
 .card-item.dragging { opacity: 0.2; }
 .card-item.drag-over { border-color: #999; background: #fafafa; }
-.drag-handle { color: #ccc; cursor: grab; font-size: 15px; flex-shrink: 0; margin-top: 2px; line-height: 1; }
+.drag-handle { color: #ccc; cursor: grab; font-size: 15px; flex-shrink: 0; margin-top: 2px; line-height: 1; touch-action: none; }
 .drag-handle:active { cursor: grabbing; }
-/* 모바일에서 드래그 핸들 숨기기 */
-@media (hover: none) and (pointer: coarse) { .drag-handle { display: none; } }
 .check-box { width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid #ddd; flex-shrink: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; margin-top: 2px; transition: all 0.15s; }
 .check-box.checked { background: #111; border-color: #111; }
 .card-texts { flex: 1; min-width: 0; }
 .card-a { font-size: 13px; font-weight: 500; color: #111; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
 .card-b { font-size: 12px; color: #888; line-height: 1.5; margin-top: 2px; white-space: pre-wrap; word-break: break-word; }
-.item-actions { display: flex; gap: 0; flex-shrink: 0; align-items: flex-start; justify-content: flex-end; }
-/* 모바일: 수정/삭제 버튼 크게 */
-.icon-btn { width: 28px; height: 28px; border: none; background: none; cursor: pointer; color: #bbb; border-radius: 6px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; font-size: 13px; }
+.item-actions { display: flex; gap: 0; flex-shrink: 0; align-items: flex-start; }
+.icon-btn { width: 22px; height: 22px; border: none; background: none; cursor: pointer; color: #ccc; border-radius: 4px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; font-size: 13px; padding: 0; }
 .icon-btn:hover { background: #f5f5f5; color: #111; }
 .icon-btn.danger:hover { color: #e24b4a; }
 @media (hover: none) and (pointer: coarse) {
-  .icon-btn { width: 36px; height: 36px; font-size: 16px; }
+  .icon-btn { width: 30px; height: 30px; font-size: 14px; }
 }
 
 /* MODAL - bottom sheet, 화면의 3/4 */
@@ -415,14 +416,16 @@ function renderManage() {
   const el = document.getElementById('manage-tab');
   const tags = allTags();
   const list = filteredCards(manageFilter);
-  const isMobile = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
 
   el.innerHTML = `
     <div class="manage-top">
       <span class="manage-title">문장 <span style="color:#999;font-weight:400">(${list.length})</span></span>
-      <div style="display:flex;gap:6px;">
-        <button class="mgr-btn" onclick="exportCards()">내보내기</button>
-        <button class="mgr-btn" onclick="triggerImport()">불러오기</button>
+      <div style="position:relative;">
+        <button class="mgr-menu-btn" id="mgr-menu-btn" onclick="toggleMgrMenu(event)">···</button>
+        <div class="mgr-dropdown hidden" id="mgr-dropdown">
+          <button class="mgr-dropdown-item" onclick="exportCards();closeMgrMenu()">내보내기</button>
+          <button class="mgr-dropdown-item" onclick="triggerImport();closeMgrMenu()">불러오기</button>
+        </div>
       </div>
     </div>
     <input type="file" id="import-input" accept=".json" style="display:none" onchange="handleImportFile(event)">
@@ -432,8 +435,8 @@ function renderManage() {
         ${list.length === 0
           ? `<div style="text-align:center;padding:3rem 1rem;color:#999;font-size:14px;">문장이 없습니다</div>`
           : list.map((c,i)=>`
-          <div class="card-item ${c.done?'done':''}" ${isMobile?'':`draggable="true" ondragstart="dStart(event,${i})" ondragover="dOver(event,${i})" ondrop="dDrop(event,${i})" ondragend="dEnd()"`} data-id="${c.id}">
-            ${isMobile?'':`<span class="drag-handle">⠿</span>`}
+          <div class="card-item ${c.done?'done':''}" draggable="true" ondragstart="dStart(event,${i})" ondragover="dOver(event,${i})" ondrop="dDrop(event,${i})" ondragend="dEnd()" data-id="${c.id}" data-idx="${i}">
+            <span class="drag-handle" data-handle="true">⠿</span>
             <div class="check-box ${c.done?'checked':''}" onclick="toggleDone(${c.id})">
               ${c.done?`<svg viewBox="0 0 10 10" width="10" height="10"><polyline points="1.5,5 4,7.5 8.5,2.5" stroke="white" stroke-width="2.5" fill="none"/></svg>`:''}
             </div>
@@ -449,6 +452,7 @@ function renderManage() {
       </div>
     </div>
   `;
+  setupTouchSort();
 }
 
 function setManageFilter(t) {
@@ -471,8 +475,22 @@ function deleteCard(id) {
   saveData(); renderManage();
 }
 
-// 데스크탑 드래그 정렬
-function dStart(e,idx) { dragSrcIdx=idx; setTimeout(()=>{ const els=document.querySelectorAll('.card-item'); if(els[idx]) els[idx].classList.add('dragging'); },0); e.dataTransfer.effectAllowed='move'; }
+// ── MENU DROPDOWN ──────────────────────────────────────────────────────────
+function toggleMgrMenu(e) {
+  e.stopPropagation();
+  document.getElementById('mgr-dropdown').classList.toggle('hidden');
+}
+function closeMgrMenu() {
+  const d = document.getElementById('mgr-dropdown');
+  if (d) d.classList.add('hidden');
+}
+document.addEventListener('click', () => closeMgrMenu());
+
+// ── DRAG SORT (데스크탑) ────────────────────────────────────────────────────
+function dStart(e,idx) {
+  if (window.matchMedia('(hover: none) and (pointer: coarse)').matches) { e.preventDefault(); return; }
+  dragSrcIdx=idx; setTimeout(()=>{ const els=document.querySelectorAll('.card-item'); if(els[idx]) els[idx].classList.add('dragging'); },0); e.dataTransfer.effectAllowed='move';
+}
 function dOver(e,idx) { e.preventDefault(); document.querySelectorAll('.card-item').forEach((el,i)=>el.classList.toggle('drag-over',i===idx&&i!==dragSrcIdx)); }
 function dDrop(e,idx) {
   e.preventDefault();
@@ -487,6 +505,74 @@ function dDrop(e,idx) {
 }
 function dEnd() { dragSrcIdx=null; document.querySelectorAll('.card-item').forEach(el=>el.classList.remove('dragging','drag-over')); }
 
+// ── TOUCH SORT (모바일) ─────────────────────────────────────────────────────
+let touchSort = { active:false, el:null, ghost:null, srcIdx:null, offsetY:0 };
+
+function setupTouchSort() {
+  const list = document.getElementById('card-list');
+  if (!list) return;
+  list.addEventListener('touchstart', onTouchSortStart, {passive:false});
+  list.addEventListener('touchmove', onTouchSortMove, {passive:false});
+  list.addEventListener('touchend', onTouchSortEnd, {passive:true});
+}
+
+function onTouchSortStart(e) {
+  const handle = e.target.closest('[data-handle]');
+  if (!handle) return;
+  e.preventDefault();
+  const item = handle.closest('.card-item');
+  if (!item) return;
+  const items = Array.from(document.querySelectorAll('.card-item'));
+  touchSort.srcIdx = items.indexOf(item);
+  touchSort.el = item;
+  const rect = item.getBoundingClientRect();
+  touchSort.offsetY = e.touches[0].clientY - rect.top;
+  const ghost = item.cloneNode(true);
+  ghost.style.cssText = `position:fixed;left:${rect.left}px;width:${rect.width}px;top:${rect.top}px;opacity:0.9;pointer-events:none;z-index:500;border-radius:14px;background:#fff;box-shadow:0 4px 20px rgba(0,0,0,0.15);`;
+  document.body.appendChild(ghost);
+  touchSort.ghost = ghost;
+  item.style.opacity = '0.25';
+  touchSort.active = true;
+}
+
+function onTouchSortMove(e) {
+  if (!touchSort.active) return;
+  e.preventDefault();
+  const y = e.touches[0].clientY;
+  touchSort.ghost.style.top = (y - touchSort.offsetY) + 'px';
+  const items = Array.from(document.querySelectorAll('.card-item'));
+  items.forEach(el => el.classList.remove('drag-over'));
+  const target = items.find(el => {
+    if (el === touchSort.el) return false;
+    const r = el.getBoundingClientRect();
+    return y >= r.top && y <= r.bottom;
+  });
+  if (target) target.classList.add('drag-over');
+}
+
+function onTouchSortEnd(e) {
+  if (!touchSort.active) return;
+  touchSort.active = false;
+  document.body.removeChild(touchSort.ghost);
+  touchSort.ghost = null;
+  touchSort.el.style.opacity = '';
+  const items = Array.from(document.querySelectorAll('.card-item'));
+  const targetEl = items.find(el => el.classList.contains('drag-over'));
+  items.forEach(el => el.classList.remove('drag-over'));
+  if (targetEl && targetEl !== touchSort.el) {
+    const targetIdx = items.indexOf(targetEl);
+    const list = filteredCards(manageFilter);
+    const srcId = list[touchSort.srcIdx].id;
+    const dstId = list[targetIdx].id;
+    const si = cards.findIndex(c => c.id === srcId);
+    const [moved] = cards.splice(si, 1);
+    const di = cards.findIndex(c => c.id === dstId);
+    cards.splice(targetIdx < touchSort.srcIdx ? di : di + 1, 0, moved);
+    saveData(); renderManage();
+  }
+  touchSort.el = null; touchSort.srcIdx = null;
+}
+
 // ── MODAL (bottom sheet + swipe to close) ─────────────────────────────────
 function openAdd() {
   editingId=null;
@@ -495,7 +581,11 @@ function openAdd() {
   modalTags=[]; tempTags=[]; showNewTagInput=false; renderModalTags();
   document.getElementById('modal').classList.remove('hidden');
   setupModalSwipe();
-  setTimeout(()=>document.getElementById('f-a').focus(),300);
+  // 키보드 노출: requestAnimationFrame으로 렌더 후 즉시 포커싱
+  requestAnimationFrame(() => {
+    const fa = document.getElementById('f-a');
+    fa.focus(); fa.click();
+  });
 }
 function openEdit(id) {
   editingId=id;
@@ -554,16 +644,25 @@ function renderModalTags() {
     allVisible.map(t=>`<div class="tag-toggle ${modalTags.includes(t)?'on':''}" onclick="toggleModalTag('${esc(t)}')">${esc(t)}</div>`).join('') +
     `<button class="tag-add-btn" onclick="toggleNewTagInput()">+</button>`;
   document.getElementById('new-tag-wrap').classList.toggle('hidden', !showNewTagInput);
-  if (showNewTagInput) setTimeout(()=>document.getElementById('tag-input').focus(), 50);
 }
 function toggleModalTag(t) { modalTags=modalTags.includes(t)?modalTags.filter(x=>x!==t):[...modalTags,t]; renderModalTags(); }
 function limitTagBytes(input) {
   const encoder = new TextEncoder();
-  while (encoder.encode(input.value).length > 20) {
+  while (encoder.encode(input.value).length > 40) {
     input.value = input.value.slice(0, -1);
   }
 }
-function toggleNewTagInput() { showNewTagInput=!showNewTagInput; document.getElementById('tag-input').value=''; renderModalTags(); }
+function toggleNewTagInput() {
+  showNewTagInput = !showNewTagInput;
+  document.getElementById('tag-input').value = '';
+  renderModalTags();
+  if (showNewTagInput) {
+    // 즉시 focus + 키보드 노출
+    const inp = document.getElementById('tag-input');
+    inp.focus();
+    inp.click();
+  }
+}
 function confirmNewTag() {
   const val = document.getElementById('tag-input').value.trim();
   if (val) {

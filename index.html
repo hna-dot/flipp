@@ -458,7 +458,7 @@ function setStudyFilter(t) {
 function renderManage() {
   const el = document.getElementById('manage-tab');
   const tags = allTags();
-  const list = filteredCards(manageFilter);
+  const list = filteredCards(manageFilter).slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
   el.innerHTML = `
     <div class="manage-top">
@@ -654,10 +654,8 @@ function closeModal() {
 function setupModalSwipe() {
   const handle = document.getElementById('modal-handle-wrap');
   const sheet = document.getElementById('modal-sheet');
-  const inner = document.getElementById('modal-inner');
   let startY = 0, dragging = false;
 
-  // 핸들 드래그로 닫기
   handle.ontouchstart = e => { startY = e.touches[0].clientY; dragging = true; };
   handle.ontouchmove = e => {
     if (!dragging) return;
@@ -669,14 +667,6 @@ function setupModalSwipe() {
     const dy = e.changedTouches[0].clientY - startY;
     if (dy > 80) closeModal();
     else { sheet.style.transition='transform 0.2s'; sheet.style.transform=''; setTimeout(()=>sheet.style.transition='',200); }
-  };
-
-  // 콘텐츠 영역 맨 위에서 아래로 스와이프 시 닫기
-  let innerStartY = 0;
-  inner.ontouchstart = e => { innerStartY = e.touches[0].clientY; };
-  inner.ontouchmove = e => {
-    const dy = e.touches[0].clientY - innerStartY;
-    if (inner.scrollTop === 0 && dy > 60) { closeModal(); }
   };
 }
 
@@ -715,7 +705,7 @@ function saveCard() {
   const a=document.getElementById('f-a').value.trim(), b=document.getElementById('f-b').value.trim();
   if (!a||!b) { alert('앞면과 뒷면을 모두 입력해주세요.'); return; }
   if (editingId) { cards=cards.map(c=>c.id===editingId?{...c,a,b,tags:modalTags}:c); }
-  else { cards.push({id:nextId++,a,b,tags:modalTags,done:false}); }
+  else { cards.push({id:nextId++,a,b,tags:modalTags,done:false,createdAt:Date.now()}); }
   tempTags=[];
   saveData(); closeModal();
   if (currentTab==='manage') setTimeout(renderManage, 300);

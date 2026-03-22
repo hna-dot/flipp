@@ -65,6 +65,10 @@ html, body { height: 100%; background: #f5f5f3; font-family: -apple-system, Blin
 .shuffle-btn { padding: 13px 16px; font-size: 13px; font-weight: 500; border-radius: 14px; cursor: pointer; background: transparent; border: 0.5px solid #e0e0e0; color: #bbb; transition: all 0.15s; white-space: nowrap; flex-shrink: 0; }
 .shuffle-btn:hover { color: #111; border-color: #999; }
 .shuffle-btn.active { background: #111; color: #fff; border-color: #111; }
+.auto-btn { padding: 13px 14px; font-size: 13px; font-weight: 500; border-radius: 14px; cursor: pointer; background: transparent; border: 0.5px solid #e0e0e0; color: #bbb; transition: all 0.15s; white-space: nowrap; flex-shrink: 0; display: flex; align-items: center; gap: 6px; }
+.auto-btn:hover { color: #111; border-color: #999; }
+.auto-btn.active { background: #111; color: #fff; border-color: #111; }
+.auto-sec-badge { font-size: 11px; font-weight: 500; opacity: 0.7; }
 
 .empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #999; font-size: 15px; text-align: center; }
 .empty-state .sub { font-size: 13px; color: #bbb; margin-top: 6px; }
@@ -284,7 +288,12 @@ function launchConfetti() {
 }
 
 let slideDir = ''; // 'left' | 'right' | ''
-let isShuffled = false; // 섞기 활성 여부
+let isShuffled = false;
+let autoPlay = false;
+let autoSec = 5; // 5 → 10 → 3 순환
+let autoTimer = null;
+let autoRemaining = 0;
+let autoRafId = null;
 function initDeck() {
   const active = getActive(studyFilter);
   studyDeck = isShuffled
@@ -296,11 +305,12 @@ function initDeck() {
 // ── TAB SWITCH ─────────────────────────────────────────────────────────────
 function switchTab(tab) {
   currentTab = tab;
+  stopAutoTimer();
   document.getElementById('study-tab').classList.toggle('hidden', tab !== 'study');
   document.getElementById('manage-tab').classList.toggle('hidden', tab !== 'manage');
   document.getElementById('tb-study').classList.toggle('active', tab === 'study');
   document.getElementById('tb-manage').classList.toggle('active', tab === 'manage');
-  if (tab === 'study') { if (studyDeck.length === 0) initDeck(); renderStudy(); }
+  if (tab === 'study') { if (studyDeck.length === 0) initDeck(); renderStudy(); if (autoPlay) startAutoTimer(); }
   else renderManage();
 }
 
@@ -333,6 +343,13 @@ function renderStudy() {
         ${card.tags.length ? `<span class="card-tag-label">${escHtml(card.tags.join(', '))}</span>` : ''}
         <span class="card-side-label">${isBack ? '뒷면' : '앞면'}</span>
         <div class="card-content">${escHtml(isBack ? card.b : card.a)}</div>
+        ${autoPlay ? `<div id="countdown-wrap" style="position:absolute;bottom:10px;right:12px;display:flex;align-items:center;gap:4px;">
+          <svg id="countdown-ring" width="24" height="24" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="10" fill="none" stroke="${isBack?'rgba(255,255,255,0.15)':'rgba(0,0,0,0.1)'}" stroke-width="2"/>
+            <circle id="countdown-arc" cx="12" cy="12" r="10" fill="none" stroke="${isBack?'rgba(255,255,255,0.7)':'rgba(0,0,0,0.5)'}" stroke-width="2" stroke-dasharray="62.83" stroke-dashoffset="0" stroke-linecap="round" transform="rotate(-90 12 12)"/>
+          </svg>
+          <span id="countdown-num" style="font-size:11px;color:${isBack?'rgba(255,255,255,0.55)':'rgba(0,0,0,0.4)'};">${autoSec}s</span>
+        </div>` : ''}
       </div>
     </div>
     <div class="action-row">
@@ -341,6 +358,9 @@ function renderStudy() {
       </button>
       <button class="shuffle-btn ${isShuffled?'active':''}" onclick="toggleShuffle()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-2px;margin-right:5px;"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>랜덤
+      </button>
+      <button class="auto-btn ${autoPlay?'active':''}" onclick="handleAutoBtn()" style="min-width:72px;justify-content:center;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="display:inline-block;vertical-align:-1px;flex-shrink:0;"><polygon points="5 3 19 12 5 21 5 3"/></svg><span style="margin-left:5px;">${autoSec}s</span>
       </button>
     </div>
   `;
@@ -359,9 +379,68 @@ function showCelebration(el, tagBar, total) {
   launchConfetti();
 }
 
-function restartDeck() { initDeck(); renderStudy(); }
+function restartDeck() {
+  isShuffled = true; // 다시 섞기는 항상 랜덤으로
+  initDeck(); renderStudy();
+  if (autoPlay) startAutoTimer();
+}
+
+// ── AUTO PLAY ──────────────────────────────────────────────────────────────
+function handleAutoBtn() {
+  if (!autoPlay) {
+    // 비활성 → 활성 (현재 초 유지)
+    autoPlay = true;
+    renderStudy();
+    startAutoTimer();
+  } else {
+    // 활성 → 다음 초로 순환, 마지막(3s) 다음은 비활성으로
+    if (autoSec === 5) { autoSec = 10; stopAutoTimer(); renderStudy(); startAutoTimer(); }
+    else if (autoSec === 10) { autoSec = 3; stopAutoTimer(); renderStudy(); startAutoTimer(); }
+    else {
+      // 3s → 비활성 + 5s 리셋
+      autoPlay = false; autoSec = 5;
+      stopAutoTimer();
+      renderStudy();
+    }
+  }
+}
+
+function startAutoTimer() {
+  stopAutoTimer();
+  autoRemaining = autoSec * 1000;
+  const start = performance.now();
+  const total = autoRemaining;
+  const circumference = 62.83;
+
+  function tick(now) {
+    const elapsed = now - start;
+    const remaining = Math.max(0, total - elapsed);
+    const secs = Math.ceil(remaining / 1000);
+    const frac = remaining / total;
+    const offset = circumference * (1 - frac);
+
+    const arc = document.getElementById('countdown-arc');
+    const num = document.getElementById('countdown-num');
+    if (arc) arc.setAttribute('stroke-dashoffset', offset.toFixed(2));
+    if (num) num.textContent = secs + 's';
+
+    if (remaining <= 0) { autoAdvance(); return; }
+    autoRafId = requestAnimationFrame(tick);
+  }
+  autoRafId = requestAnimationFrame(tick);
+}
+
+function stopAutoTimer() {
+  if (autoRafId) { cancelAnimationFrame(autoRafId); autoRafId = null; }
+}
+
+function autoAdvance() {
+  goNext();
+  if (autoPlay) startAutoTimer();
+}
 
 function markMemorized(id) {
+  stopAutoTimer();
   const wasDone = cards.find(c=>c.id===id)?.done;
   cards = cards.map(c => c.id===id ? {...c, done:!wasDone} : c);
   saveData();
@@ -375,6 +454,7 @@ function markMemorized(id) {
     } else { deckCardIdx = next; }
   }
   renderStudy();
+  if (autoPlay) startAutoTimer();
 }
 
 function setupCardInteraction() {
@@ -392,10 +472,12 @@ function setupCardInteraction() {
 }
 
 function goNext() {
+  stopAutoTimer();
   if (!isBack) {
     slideDir = '';
     isBack = true;
     renderStudy();
+    if (autoPlay) startAutoTimer();
   } else {
     if (deckCardIdx === studyDeck.length - 1) {
       slideDir = '';
@@ -410,21 +492,25 @@ function goNext() {
         isBack = false; deckCardIdx++;
         renderStudy();
         slideDir = '';
+        if (autoPlay) startAutoTimer();
       });
     }
   }
 }
 function goPrev() {
+  stopAutoTimer();
   if (isBack) {
     slideDir = '';
     isBack = false;
     renderStudy();
+    if (autoPlay) startAutoTimer();
   } else if (deckCardIdx > 0) {
     slideCard('right', () => {
       slideDir = 'right';
       deckCardIdx--; isBack = false;
       renderStudy();
       slideDir = '';
+      if (autoPlay) startAutoTimer();
     });
   }
 }

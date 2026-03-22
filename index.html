@@ -359,8 +359,8 @@ function renderStudy() {
       <button class="shuffle-btn ${isShuffled?'active':''}" onclick="toggleShuffle()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-2px;margin-right:5px;"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>랜덤
       </button>
-      <button class="auto-btn ${autoPlay?'active':''}" onclick="handleAutoBtn()" style="min-width:72px;justify-content:center;">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="display:inline-block;vertical-align:-1px;flex-shrink:0;"><polygon points="5 3 19 12 5 21 5 3"/></svg><span style="margin-left:5px;">${autoSec}s</span>
+      <button class="auto-btn ${autoPlay?'active':''}" onclick="toggleAutoPlay()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="display:inline-block;vertical-align:-1px;flex-shrink:0;"><polygon points="5 3 19 12 5 21 5 3"/></svg><span style="margin-left:5px;" onclick="if(autoPlay){event.stopPropagation();cycleAutoSec();}">${autoSec}s</span>
       </button>
     </div>
   `;
@@ -386,23 +386,22 @@ function restartDeck() {
 }
 
 // ── AUTO PLAY ──────────────────────────────────────────────────────────────
-function handleAutoBtn() {
-  if (!autoPlay) {
-    // 비활성 → 활성 (현재 초 유지)
-    autoPlay = true;
-    renderStudy();
-    startAutoTimer();
-  } else {
-    // 활성 → 다음 초로 순환, 마지막(3s) 다음은 비활성으로
-    if (autoSec === 5) { autoSec = 10; stopAutoTimer(); renderStudy(); startAutoTimer(); }
-    else if (autoSec === 10) { autoSec = 3; stopAutoTimer(); renderStudy(); startAutoTimer(); }
-    else {
-      // 3s → 비활성 + 5s 리셋
-      autoPlay = false; autoSec = 5;
-      stopAutoTimer();
-      renderStudy();
-    }
-  }
+// ── AUTO PLAY ──────────────────────────────────────────────────────────────
+function toggleAutoPlay() {
+  autoPlay = !autoPlay;
+  if (autoPlay) { startAutoTimer(); }
+  else { stopAutoTimer(); }
+  renderStudy();
+  if (autoPlay) startAutoTimer();
+}
+
+function cycleAutoSec() {
+  if (autoSec === 5) autoSec = 10;
+  else if (autoSec === 10) autoSec = 3;
+  else autoSec = 5;
+  stopAutoTimer();
+  renderStudy();
+  startAutoTimer();
 }
 
 function startAutoTimer() {

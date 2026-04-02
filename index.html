@@ -76,6 +76,7 @@ html, body { height: 100%; background: #f5f5f3; font-family: -apple-system, Blin
 .auto-toggle-label { font-size: 13px; font-weight: 500; color: var(--color-text-primary, #111); }
 .auto-sec-btn { font-size: 13px; font-weight: 500; padding: 0; border: none; border-bottom: 1.5px solid #bbb; background: transparent; color: #bbb; cursor: default; transition: all 0.15s; border-radius: 0; }
 .auto-sec-btn:not(.disabled) { color: #111; border-bottom-color: #111; cursor: pointer; }
+.ad-wrap { flex-shrink: 0; min-height: 60px; margin-top: 4px; }
 .auto-sec-badge { font-size: 11px; font-weight: 500; opacity: 0.7; }
 
 .empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #999; font-size: 15px; text-align: center; }
@@ -322,12 +323,91 @@ function switchTab(tab) {
   else renderManage();
 }
 
+// ── ONBOARDING CARDS ───────────────────────────────────────────────────────
+const onboardingCards = [
+  {
+    a: 'Flipp에 오신 걸 환영해요 👋',
+    b: '외우고 싶은 문장을 앞면/뒷면 세트로 등록하고,\n카드를 넘기며 학습해요.'
+  },
+  {
+    a: '문장 추가하기\nHow to add a card',
+    b: '하단 + 버튼을 눌러 앞면(A)과 뒷면(B)을 입력하세요.\nTap + at the bottom to add a new card.'
+  },
+  {
+    a: '카드 넘기는 방법\nHow to navigate',
+    b: '오른쪽 탭 / 왼쪽 스와이프 → 다음\n왼쪽 탭 / 오른쪽 스와이프 → 이전'
+  },
+  {
+    a: '다 외웠다면?\nWhen you\'ve memorized it',
+    b: '\'완벽히 외웠음\'을 누르면 해당 카드가 덱에서 빠져요.\n랜덤 모드와 자동 전환으로 복습 효율을 높여보세요.'
+  }
+];
+let onboardIdx = 0;
+let onboardBack = false;
+
+function renderOnboarding(el) {
+  const card = onboardingCards[onboardIdx];
+  const progress = ((onboardIdx + 1) / onboardingCards.length) * 100;
+  el.innerHTML = `
+    <div style="height:1rem;flex-shrink:0;"></div>
+    <div class="progress-row">
+      <div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:${progress}%"></div></div>
+      <span class="progress-count">${onboardIdx + 1} / ${onboardingCards.length}</span>
+    </div>
+    <div class="card-area" id="card-area">
+      <div class="flashcard ${onboardBack?'back':''}">
+        <span class="card-side-label">${onboardBack ? '뒷면' : '앞면'}</span>
+        <div class="card-content">${escHtml(onboardBack ? card.b : card.a)}</div>
+      </div>
+    </div>
+    <div style="text-align:center;margin-bottom:1rem;flex-shrink:0;">
+      <button onclick="openAdd()" style="padding:12px 28px;border-radius:14px;background:#111;color:#fff;border:none;font-size:14px;font-weight:500;cursor:pointer;">+ 첫 문장 추가하기</button>
+    </div>
+  `;
+  const area = document.getElementById('card-area');
+  if (!area) return;
+  let tx = 0;
+  area.addEventListener('touchstart', e => { tx = e.touches[0].clientX; }, {passive:true});
+  area.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - tx;
+    if (Math.abs(dx) > 40) { dx < 0 ? onboardNext() : onboardPrev(); }
+  }, {passive:true});
+  area.addEventListener('click', e => {
+    const rect = area.getBoundingClientRect();
+    e.clientX - rect.left >= rect.width / 2 ? onboardNext() : onboardPrev();
+  });
+}
+
+function onboardNext() {
+  if (!onboardBack) { onboardBack = true; }
+  else {
+    onboardBack = false;
+    onboardIdx = (onboardIdx + 1) % onboardingCards.length;
+  }
+  const el = document.getElementById('study-tab');
+  renderOnboarding(el);
+}
+function onboardPrev() {
+  if (onboardBack) { onboardBack = false; }
+  else if (onboardIdx > 0) { onboardIdx--; onboardBack = true; }
+  const el = document.getElementById('study-tab');
+  renderOnboarding(el);
+}
+
 // ── STUDY ──────────────────────────────────────────────────────────────────
 function renderStudy() {
   const el = document.getElementById('study-tab');
   const tags = allTags();
   const tagBar = `<div class="tag-scroll">${['전체',...tags].map(t=>`<div class="tag-pill ${studyFilter===t?'active':''}" onclick="setStudyFilter('${esc(t)}')">${esc(t)}</div>`).join('')}</div>`;
   const filtered = filteredCards(studyFilter);
+
+  // 등록된 문장 없음 → 온보딩 카드
+  if (cards.length === 0) {
+    onboardIdx = 0; onboardBack = false;
+    el.innerHTML = tagBar;
+    renderOnboarding(el);
+    return;
+  }
 
   if (filtered.length === 0) {
     el.innerHTML = tagBar + `<div class="empty-state"><p>문장이 없습니다</p><p class="sub">+ 버튼으로 추가해보세요</p></div>`;
@@ -375,8 +455,12 @@ function renderStudy() {
       </button>
       ${autoPlay ? `<button class="auto-sec-btn" onclick="cycleAutoSec()">${autoSec}s</button>` : ''}
     </div>
+    <div class="ad-wrap">
+      <ins class="adsbygoogle" style="display:block" data-ad-client="ca-pub-4056187987785109" data-ad-slot="" data-ad-format="auto" data-full-width-responsive="true"></ins>
+    </div>
   `;
   setupCardInteraction();
+  try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch(e) {}
 }
 
 function showCelebration(el, tagBar, total) {
